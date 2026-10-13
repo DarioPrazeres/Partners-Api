@@ -1,0 +1,117 @@
+### Exemplos HTTP — VS Code (REST Client), Visual Studio, Rider.
+### Arrancar a API primeiro:  dotnet run --project src/Partners.Api   (http://localhost:5080)
+
+@baseUrl = http://localhost:5080
+
+### 1. Criar cliente (nome com espaços, NIF com pontos -> guarda "Ana Silva" / "001234567")
+# @name create
+POST {{baseUrl}}/api/partners
+Content-Type: application/json
+
+{
+  "Name": " Ana Silva ",
+  "TaxNumber": "001.234.567",
+  "Type": "CUSTOMER",
+  "Email": "ana.silva@example.com",
+  "CreditLimit": 5000.50
+}
+
+###
+@partnerId = {{create.response.body.$.Id}}
+@version = {{create.response.body.$.Version}}
+
+### 2. Obter por Id (também devolve inativas; 404 se não existir)
+GET {{baseUrl}}/api/partners/{{partnerId}}
+
+### 3. Mesmo NIF com outra representação -> 409 duplicate_tax_number
+POST {{baseUrl}}/api/partners
+Content-Type: application/json
+
+{ "Name": "Outra Ana", "TaxNumber": "001 234 567", "Type": "SUPPLIER", "Email": null, "CreditLimit": 0 }
+
+### 4. Entidade BOTH
+POST {{baseUrl}}/api/partners
+Content-Type: application/json
+
+{ "Name": "Tecnologias Ponte SA", "TaxNumber": "501-234-567", "Type": "BOTH", "Email": "", "CreditLimit": 25000 }
+
+### 5. Listagem (por defeito: só ativas, Page=1, PageSize=20)
+GET {{baseUrl}}/api/partners
+
+### 6. Filtros combinados: Search (nome ou NIF), Type, IncludeInactive, paginação
+GET {{baseUrl}}/api/partners?Search=ana&Type=CUSTOMER&IncludeInactive=true&Page=1&PageSize=5
+
+### 7. Procurar por NIF (separadores são normalizados)
+GET {{baseUrl}}/api/partners?Search=001.234
+
+### 8. Página além dos resultados -> Items vazio e TotalCount correto
+GET {{baseUrl}}/api/partners?Page=99
+
+### 9. Atualizar (PUT completo; Version obrigatória) — desativar
+# @name update
+PUT {{baseUrl}}/api/partners/{{partnerId}}
+Content-Type: application/json
+
+{
+  "Name": "Ana Silva",
+  "TaxNumber": "001234567",
+  "Type": "CUSTOMER",
+  "Email": null,
+  "CreditLimit": 5000.50,
+  "IsActive": false,
+  "Version": "{{version}}"
+}
+
+### 10. Repetir o PUT com a Version antiga -> 409 version_conflict
+PUT {{baseUrl}}/api/partners/{{partnerId}}
+Content-Type: application/json
+
+{
+  "Name": "Nao Deve Gravar",
+  "TaxNumber": "001234567",
+  "Type": "CUSTOMER",
+  "Email": null,
+  "CreditLimit": 1,
+  "IsActive": true,
+  "Version": "{{version}}"
+}
+
+### 11. Reativar usando a nova Version
+PUT {{baseUrl}}/api/partners/{{partnerId}}
+Content-Type: application/json
+
+{
+  "Name": "Ana Silva",
+  "TaxNumber": "001234567",
+  "Type": "CUSTOMER",
+  "Email": null,
+  "CreditLimit": 5000.50,
+  "IsActive": true,
+  "Version": "{{update.response.body.$.Version}}"
+}
+
+### ---------- Pedidos inválidos (todos 400, sem alterações) ----------
+
+### CreditLimit com três casas decimais
+POST {{baseUrl}}/api/partners
+Content-Type: application/json
+
+{ "Name": "Ana", "TaxNumber": "123456789", "Type": "CUSTOMER", "Email": null, "CreditLimit": 10.999 }
+
+### NIF com letras
+POST {{baseUrl}}/api/partners
+Content-Type: application/json
+
+{ "Name": "Ana", "TaxNumber": "12345678A", "Type": "CUSTOMER", "Email": null, "CreditLimit": 10 }
+
+### Page=0
+GET {{baseUrl}}/api/partners?Page=0
+
+### Type inválido
+GET {{baseUrl}}/api/partners?Type=INVALID
+
+### Version malformada
+PUT {{baseUrl}}/api/partners/{{partnerId}}
+Content-Type: application/json
+
+{ "Name": "Ana", "TaxNumber": "001234567", "Type": "CUSTOMER", "Email": null, "CreditLimit": 1, "IsActive": true, "Version": "isto-nao-e-base64" }
